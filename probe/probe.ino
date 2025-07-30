@@ -4,6 +4,7 @@
 #include <Wire.h>
 #include <Adafruit_BMP280.h>
 #include <Adafruit_LIS3MDL.h>
+#include <LittleFS.h>
 
 #define DEBUG 26
 #define STATUS_LED 13
@@ -53,6 +54,10 @@ void setup() {
 	Serial.println("DEBUG MODE ENABLED");
     }
 
+    if (!LittleFS.begin()) {
+        error("Misslyckades att mounta LittleFS");
+    }
+
     delay(1000);
 
     initLoRa();
@@ -66,7 +71,7 @@ void loop() {
     getPressure();
     getMagnet();
 
-    String msg = String(temp)+";"+String(pressure)+";"+String(accelX)+";"+String(accelY)+";"+String(accelZ)+"\n";
+    String msg = String(temp)+";"+String(pressure)+";"+String(accelX)+";"+String(accelY)+";"+String(accelZ)+";"+String(magnetX)+";"+String(magnetY)+";"+String(magnetZ)+"\n";
 
     log(msg);
 }
@@ -110,6 +115,12 @@ void initMagnet() {
 }
 
 void log(String msg) {
+    File file = LittleFS.open("/data.txt", "a");
+    if (file) {
+      file.print(msg);
+      file.close();
+    }
+    
     int len = msg.length();
 
     if (currBufPos + len > RH_RF95_MAX_MESSAGE_LEN - 1) {
