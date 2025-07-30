@@ -21,8 +21,7 @@ uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
 
 // Barometer
 Adafruit_BMP280 bmp;
-const float pressureBaseline = 1013.25; // hPa
-float temp, pressure, alt;
+float temp, pressure;
 
 // Accelerometer
 #define ADXL345_ADDR 0x53
@@ -146,8 +145,7 @@ void getAccel() {
 
 void getPressure(){
     temp = bmp.readTemperature(); 
-    pressure = bmp.readPressure() / 100.0;
-    alt = bmp.readAltitude(pressureBaseline);
+    pressure = bmp.readPressure();
 }
 
 void getMagnet() {
