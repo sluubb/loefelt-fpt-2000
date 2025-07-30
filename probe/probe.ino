@@ -67,7 +67,7 @@ void setup() {
     Wire.begin();
     Wire.beginTransmission(ADXL345_ADDR);
     Wire.write(0x2D);
-    Wire.write(8);
+    Wire.write(0x08);
     Wire.endTransmission();
 
     if (!bmp.begin(0x76)) {
@@ -90,7 +90,8 @@ void loop() {
     BMP_280();
     //LIS3MDL();
 
-    log("temp " + String(temp) + "   pressure " + String(pressure) + "    acc " + String(accX) + " " + String(accY) + " " + String(accZ));
+    String msg = "temp " + String(temp) + "   pressure " + String(pressure) + "    acc " + String(accX) + " " + String(accY) + " " + String(accZ);
+    Serial.println(msg);
 }
 
 void log(String msg) {
@@ -126,9 +127,9 @@ void Adxl_345() {
     Wire.endTransmission(false);
     Wire.requestFrom(ADXL345_ADDR, 6, true);
 
-    accX = (Wire.read() | Wire.read() << 8);
-    accY = (Wire.read() | Wire.read() << 8);
-    accZ = (Wire.read() | Wire.read() << 8);
+    accX = (int16_t)(Wire.read() | Wire.read() << 8) / 256.0;
+    accY = (int16_t)(Wire.read() | Wire.read() << 8) / 256.0;
+    accZ = (int16_t)(Wire.read() | Wire.read() << 8) / 256.0;
 }
 
 void BMP_280(){
