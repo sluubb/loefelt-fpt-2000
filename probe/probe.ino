@@ -18,6 +18,8 @@ const float loraFrequency = 433.0;   // MHz
 const int loraBandwidth = 125;       // kHz
 const int loraTxPower = 20;          // dBm
 RH_RF95 lora(LORA_CS, LORA_INT);
+
+uint8_t currBufPos = 0;
 uint8_t buf[RH_RF95_MAX_MESSAGE_LEN]; 
 
 // Barometer
@@ -64,8 +66,9 @@ void loop() {
     getPressure();
     getMagnet();
 
-    String msg = String(temp)+";"+String(pressure)+";"+String(accelX)+";"+String(accelY)+";"+String(accelZ);
-    Serial.println(msg);
+    String msg = String(temp)+";"+String(pressure)+";"+String(accelX)+";"+String(accelY)+";"+String(accelZ)+"\n";
+
+    log(msg);
 }
 
 void initLoRa() {
@@ -107,16 +110,21 @@ void initMagnet() {
 }
 
 void log(String msg) {
-    lora.waitPacketSent();
-
     int len = msg.length();
-    msg.toCharArray((char *)buf, sizeof(buf));
 
-    lora.send(buf, len);
+    if (currBufPos + len > RH_RF95_MAX_MESSAGE_LEN - 1) {
+	digitalWrite(STATUS_LED, HIGH);
+	delay(10);
+	digitalWrite(STATUS_LED, LOW);
 
-    digitalWrite(STATUS_LED, HIGH);
-    delay(10);
-    digitalWrite(STATUS_LED, LOW);
+	buf[currBufPos] = '\0';
+
+	lora.send(buf, currBufPos);
+	currBufPos = 0;
+    }
+
+    msg.toCharArray((char *)&buf[currBufPos], sizeof(buf) - currBufPos);
+    currBufPos += len;
 }
 
 void error(String msg) {

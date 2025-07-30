@@ -36,10 +36,7 @@ void loop() {
     lora.waitAvailable();
     uint8_t len = sizeof(buf);
     if (lora.recv(buf, &len)) {
-	Serial.print("Got: ");
-	Serial.println((char *)buf);
-	Serial.print("RSSI: ");
-	Serial.println(lora.lastRssi(), DEC);
+	Serial.print((char *)buf);
     } else {
 	Serial.println("Receive failed");
     }
