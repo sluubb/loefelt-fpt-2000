@@ -26,7 +26,7 @@ float temp, pressure, alt;
 
 // Accelerometer
 #define ADXL345_ADDR 0x53
-float accX, accY, accZ;
+float accelX, accelY, accelZ;
 
 // Magnetometer
 Adafruit_LIS3MDL lis3mdl;
@@ -38,6 +38,8 @@ void setup() {
 
     pinMode(LORA_RST, OUTPUT);
     digitalWrite(LORA_RST, HIGH);
+
+    Wire.begin();
 
     if (digitalRead(DEBUG) == HIGH) {
 	debugMode = true;
@@ -51,6 +53,22 @@ void setup() {
 
     delay(1000);
 
+    initLoRa();
+    initAccel();
+    initPressure();
+//    initMagnet();
+}
+
+void loop() {
+    getAccel();
+    getPressure();
+//    getMagnet();
+
+    String msg = String(temp)+";"+String(pressure)+";"+String(accelX)+";"+String(accelY)+";"+String(accelZ);
+    Serial.println(msg);
+}
+
+void initLoRa() {
     digitalWrite(LORA_RST, LOW);
     delay(10);
     digitalWrite(LORA_RST, HIGH);
@@ -63,18 +81,22 @@ void setup() {
     lora.setFrequency(loraFrequency);
     lora.setSignalBandwidth(loraBandwidth);
     lora.setTxPower(loraTxPower, false);
+}
 
-    Wire.begin();
+void initAccel() {
     Wire.beginTransmission(ADXL345_ADDR);
     Wire.write(0x2D);
     Wire.write(0x08);
     Wire.endTransmission();
+}
 
+void initPressure() {
     if (!bmp.begin(0x76)) {
 	error("BMP280 not found");
     }
+}
 
-/*
+void initMagnet() {
     if (!lis3mdl.begin_I2C()) {
 	error("LIS3MDL not found");
     }
@@ -82,16 +104,6 @@ void setup() {
     lis3mdl.setPerformanceMode(LIS3MDL_LOWPOWERMODE);
     lis3mdl.setRange(LIS3MDL_RANGE_4_GAUSS);
     lis3mdl.setDataRate(LIS3MDL_DATARATE_10_HZ);
-*/
-}
-
-void loop() {
-    Adxl_345();
-    BMP_280();
-    //LIS3MDL();
-
-    String msg = "temp " + String(temp) + "   pressure " + String(pressure) + "    acc " + String(accX) + " " + String(accY) + " " + String(accZ);
-    Serial.println(msg);
 }
 
 void log(String msg) {
@@ -121,24 +133,24 @@ void error(String msg) {
     }
 }
 
-void Adxl_345() {
+void getAccel() {
     Wire.beginTransmission(ADXL345_ADDR);
     Wire.write(0x32);
     Wire.endTransmission(false);
     Wire.requestFrom(ADXL345_ADDR, 6, true);
 
-    accX = (int16_t)(Wire.read() | Wire.read() << 8) / 256.0;
-    accY = (int16_t)(Wire.read() | Wire.read() << 8) / 256.0;
-    accZ = (int16_t)(Wire.read() | Wire.read() << 8) / 256.0;
+    accelX = (int16_t)(Wire.read() | Wire.read() << 8) / 256.0;
+    accelY = (int16_t)(Wire.read() | Wire.read() << 8) / 256.0;
+    accelZ = (int16_t)(Wire.read() | Wire.read() << 8) / 256.0;
 }
 
-void BMP_280(){
+void getPressure(){
     temp = bmp.readTemperature(); 
-    pressure = bmp.readPressure() / 100.0F;
+    pressure = bmp.readPressure() / 100.0;
     alt = bmp.readAltitude(pressureBaseline);
 }
 
-void LIS3MDL() {
+void getMagnet() {
     sensors_event_t event;
     lis3mdl.getEvent(&event);
 
