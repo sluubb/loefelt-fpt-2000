@@ -1,4 +1,5 @@
 #include <SPI.h>
+#include <SD.h>
 #include <RH_RF95.h>
 #include <Wire.h>
 #include <Adafruit_BMP280.h>
@@ -55,13 +56,13 @@ void setup() {
     initLoRa();
     initAccel();
     initPressure();
-//    initMagnet();
+    initMagnet();
 }
 
 void loop() {
     getAccel();
     getPressure();
-//    getMagnet();
+    getMagnet();
 
     String msg = String(temp)+";"+String(pressure)+";"+String(accelX)+";"+String(accelY)+";"+String(accelZ);
     Serial.println(msg);
