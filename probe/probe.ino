@@ -9,26 +9,28 @@
 
 bool debugMode = false;
 
-// LoRa module
+// LoRa
 #define LORA_CS 1
 #define LORA_INT 24
 #define LORA_RST 25
-const float loraFrequency = 433.0; // MHz
-const int loraBandwidth = 125;     // kHz
-const int loraTxPower = 20;        // dBm
+const float loraFrequency = 433.0;   // MHz
+const int loraBandwidth = 125;       // kHz
+const int loraTxPower = 20;          // dBm
 RH_RF95 lora(LORA_CS, LORA_INT);
 uint8_t buf[RH_RF95_MAX_MESSAGE_LEN]; 
 
-//BMP280
+// Barometer
 Adafruit_BMP280 bmp;
-#define Sp_HPa 1013.25
+const float pressureBaseline = 1013.25; // hPa
+float temp, pressure, alt;
 
-//ADXL345
+// Accelerometer
 #define ADXL345_ADDR 0x53
-int16_t X_cords, Y_cords, Z_cords;
+float accX, accY, accZ;
 
-//LIS3MDL
+// Magnetometer
 Adafruit_LIS3MDL lis3mdl;
+float magnetX, magnetY, magnetZ;
 
 void setup() {
     pinMode(DEBUG, INPUT_PULLUP);
@@ -41,11 +43,6 @@ void setup() {
 	debugMode = true;
 
 	Serial.begin(9600);
-    Wire.begin();
-    Wire.beginTransmission(ADXL345_ADDR);
-    Wire.write(0x2D);
-    Wire.write(8);
-    Wire.endTransmission();
 
 	while (!Serial);
 
@@ -67,30 +64,38 @@ void setup() {
     lora.setSignalBandwidth(loraBandwidth);
     lora.setTxPower(loraTxPower, false);
 
-    if (!bmp.begin(0x76)) { 
-    Serial.println("BMP280 hittades inte");
-    while (1);
-  }
+    Wire.begin();
+    Wire.beginTransmission(ADXL345_ADDR);
+    Wire.write(0x2D);
+    Wire.write(8);
+    Wire.endTransmission();
 
+    if (!bmp.begin(0x76)) {
+	error("BMP280 not found");
+    }
+
+/*
     if (!lis3mdl.begin_I2C()) {
-      Serial.println("LIS3MDL hittas inte");
-      while (1);
-}
-    Serial.println("LIS3MDL initierad");
-    lis3mdl.setPerformanceMode(LIS3MDL_LOWPOWER);
+	error("LIS3MDL not found");
+    }
+
+    lis3mdl.setPerformanceMode(LIS3MDL_LOWPOWERMODE);
     lis3mdl.setRange(LIS3MDL_RANGE_4_GAUSS);
     lis3mdl.setDataRate(LIS3MDL_DATARATE_10_HZ);
+*/
 }
 
 void loop() {
-    log("Aladab");
     Adxl_345();
     BMP_280();
-    LIS3MDL();
-    delay(1000);
+    //LIS3MDL();
+
+    log("temp " + String(temp) + "   pressure " + String(pressure) + "    acc " + String(accX) + " " + String(accY) + " " + String(accZ));
 }
 
 void log(String msg) {
+    lora.waitPacketSent();
+
     int len = msg.length();
     msg.toCharArray((char *)buf, sizeof(buf));
 
@@ -116,42 +121,27 @@ void error(String msg) {
 }
 
 void Adxl_345() {
-  Wire.beginTransmission(ADXL345_ADDR);
-  Wire.write(0x32);
-  Wire.endTransmission(false);
-  Wire.requestFrom(ADXL345_ADDR, 6, true);
+    Wire.beginTransmission(ADXL345_ADDR);
+    Wire.write(0x32);
+    Wire.endTransmission(false);
+    Wire.requestFrom(ADXL345_ADDR, 6, true);
 
-  X_cords = (Wire.read() | Wire.read() << 8);
-  Y_cords = (Wire.read() | Wire.read() << 8);
-  Z_cords = (Wire.read() | Wire.read() << 8);
-
-
-  Serial.print("X: "); Serial.print(X_cords);
-  Serial.print("  Y: "); Serial.print(Y_cords);
-  Serial.print("  Z: "); Serial.println(Z_cords);
+    accX = (Wire.read() | Wire.read() << 8);
+    accY = (Wire.read() | Wire.read() << 8);
+    accZ = (Wire.read() | Wire.read() << 8);
 }
 
 void BMP_280(){
-  float te = bmp.readTemperature(); 
-  float pr = bmp.readPressure() / 100.0F;
-  float al = bmp.readAltitude(Sp_HPa);
-
-  Serial.print("Temp: ");
-  Serial.print(te);
-  Serial.print(" °C   Tryck: ");
-  Serial.print(pr);
-  Serial.print(" hPa   Höjd: ");
-  Serial.print(al);
-  Serial.println(" m");
+    temp = bmp.readTemperature(); 
+    pressure = bmp.readPressure() / 100.0F;
+    alt = bmp.readAltitude(pressureBaseline);
 }
 
-
 void LIS3MDL() {
-  sensors_event_t event;
-  lis3mdl.getEvent(&event);
+    sensors_event_t event;
+    lis3mdl.getEvent(&event);
 
-  Serial.print("Magnet X: "); Serial.print(event.magnetic.x);
-  Serial.print("  Y: "); Serial.print(event.magnetic.y);
-  Serial.print("  Z: "); Serial.println(event.magnetic.z);
-
+    magnetX = event.magnetic.x;
+    magnetY = event.magnetic.y;
+    magnetZ = event.magnetic.z;
 }

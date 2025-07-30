@@ -33,7 +33,6 @@ void setup() {
 }
 
 void loop() {
-    Serial.println("Waiting for receive...");
     lora.waitAvailable();
     uint8_t len = sizeof(buf);
     if (lora.recv(buf, &len)) {
