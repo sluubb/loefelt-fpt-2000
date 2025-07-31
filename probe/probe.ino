@@ -15,17 +15,16 @@ bool debugMode = false;
 #define LORA_CS 1
 #define LORA_INT 24
 #define LORA_RST 25
-const uint8_t loraTxPower = 10;      // dBm
+const uint8_t loraTxPower = 20;      // dBm
 const float loraFrequency = 433.0;   // MHz
 const unsigned long loraBandwidth = 125;      // kHz
 const uint8_t loraSpreadingFactor = 7;
 RH_RF95 lora(LORA_CS, LORA_INT);
 
 // logging
-const String logFilePath = "/log.csv";
-const unsigned long logInterval = 50;
-const unsigned long logFlushInterval = 10000;
-unsigned long lastLogFlushTime = 0;
+File logFile;
+const char *logFilePath = "/log.csv";
+const unsigned long logInterval = 100;
 const unsigned long radioLogInterval = 1000;
 unsigned long lastRadioLogTime = 0;
 
@@ -44,9 +43,6 @@ float accelX, accelY, accelZ;
 Adafruit_LIS3MDL lis3mdl;
 float magnetX, magnetY, magnetZ;
 
-// FS
-File file;
-
 void setup() {
     pinMode(DEBUG, INPUT_PULLUP);
     pinMode(STATUS_LED, OUTPUT);
@@ -60,7 +56,6 @@ void setup() {
 	debugMode = true;
 
 	Serial.begin(9600);
-
 	while (!Serial);
 
 	Serial.println("DEBUG MODE ENABLED");
@@ -76,47 +71,56 @@ void setup() {
 }
 
 void loop() {
+    if (!debugMode && digitalRead(DEBUG) == HIGH) {
+	digitalWrite(STATUS_LED, HIGH);
+	logFile.close();
+
+	delay(1000);
+
+	Serial.begin(9600);
+	while (!Serial);
+
+	logFile = LittleFS.open(logFilePath, "r");
+	if (!logFile) {
+	    Serial.println("ERROR :: Failed to open log file");
+	    while (1);
+	}
+
+	while (logFile.available()) {
+	    Serial.write(logFile.read());
+	}
+
+	logFile.close();
+
+	while (1);
+    }
+
     getAccel();
     getPressure();
-//    getMagnet();
+    //getMagnet();
 
-    String msg = millis()+";"+String(temp)+";"+String(pressure)+";"+String(accelX)+";"+String(accelY)+";"+String(accelZ)+";"+String(magnetX)+";"+String(magnetY)+";"+String(magnetZ)+"\n";
+    unsigned long time = millis();
+    String msg = String(time)+";"+String(temp)+";"+String(pressure)+";"+String(accelX)+";"+String(accelY)+";"+String(accelZ)+";"+String(magnetX)+";"+String(magnetY)+";"+String(magnetZ)+"\n";
 
-    digitalWrite(STATUS_LED, HIGH);
     log(msg);
-    digitalWrite(STATUS_LED, LOW);
 
     delay(logInterval);
 }
 
 void log(String msg) {
-    int len = msg.length();
-    
-    if (currBufPos + len > RH_RF95_MAX_MESSAGE_LEN - 1) {
-	if (lora.mode() != RH_RF95::RHModeTx) {
-	    buf[currBufPos] = '\0';
-	    lora.send(buf, currBufPos);
-
-	    if (debugMode) {
-		Serial.println("INFO :: LoRa buffer transmitted (" + String(currBufPos) + " bytes)");
-	    }
-	} else if (debugMode) {
-	    Serial.println("WARN :: LoRa buffer skipped");
-	}
-
-	currBufPos = 0;
-    }
-
-    File file = LittleFS.open(logFilePath, "a");
-    if (!file) error("Failed to open log file");
-    file.write(msg);
-    file.close();
+    logFile.print(msg);
+    logFile.flush();
 
     if (millis() - lastRadioLogTime >= radioLogInterval) {
-	lastRadioLogTime = millis();
+	lastRadioLogTime += radioLogInterval;
 
-	msg.toCharArray((char *)&buf[currBufPos], sizeof(buf) - currBufPos);
-	currBufPos += len;
+	if (lora.mode() != RH_RF95::RHModeTx) {
+	    char packet[RH_RF95_MAX_MESSAGE_LEN];
+	    msg.toCharArray(packet, sizeof(packet));
+	    lora.send((uint8_t *)packet, msg.length());
+	} else if (debugMode) {
+	    Serial.println("WARN :: LoRa package skipped");
+	}
     }
 }
 
@@ -138,6 +142,13 @@ void initFS() {
     if (!LittleFS.begin()) {
 	error("Failed to mount LittleFS");
     }
+
+    if (debugMode)
+	if (!LittleFS.remove(logFilePath))
+	    Serial.println("INFO :: No previous log file found to delete");
+
+    logFile = LittleFS.open(logFilePath, "a");
+    if (!logFile) error("Failed to open log file");
 }
 
 void initLoRa() {
