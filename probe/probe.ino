@@ -90,8 +90,6 @@ void loop() {
 }
 
 void log(String msg) {
-    file.print(msg);
-
     int len = msg.length();
     
     if (currBufPos + len > RH_RF95_MAX_MESSAGE_LEN - 1) {
@@ -109,18 +107,10 @@ void log(String msg) {
 	currBufPos = 0;
     }
 
-    if (millis() - lastLogFlushTime >= logFlushInterval) {
-	lastLogFlushTime = millis();
-
-	file.flush();
-	file.close();
-	file = LittleFS.open(logFilePath, "a");
-	if (!file) error("Failed to open log file");
-
-	if (debugMode) {
-	    Serial.println("INFO :: Log file flushed");
-	}
-    }
+    File file = LittleFS.open(logFilePath, "a");
+    if (!file) error("Failed to open log file");
+    file.write(msg);
+    file.close();
 
     if (millis() - lastRadioLogTime >= radioLogInterval) {
 	lastRadioLogTime = millis();
@@ -148,9 +138,6 @@ void initFS() {
     if (!LittleFS.begin()) {
 	error("Failed to mount LittleFS");
     }
-
-    file = LittleFS.open(logFilePath, "w");
-    if (!file) error("Failed to open log file");
 }
 
 void initLoRa() {
