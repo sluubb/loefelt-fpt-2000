@@ -15,9 +15,10 @@ bool debugMode = false;
 #define LORA_CS 1
 #define LORA_INT 24
 #define LORA_RST 25
+const uint8_t loraTxPower = 10;      // dBm
 const float loraFrequency = 433.0;   // MHz
-const int loraBandwidth = 125;       // kHz
-const int loraTxPower = 20;          // dBm
+const long loraBandwidth = 125;      // kHz
+const uint8_t loraSpreadingFactor = 7;
 RH_RF95 lora(LORA_CS, LORA_INT);
 
 uint8_t currBufPos = 0;
@@ -54,26 +55,34 @@ void setup() {
 	Serial.println("DEBUG MODE ENABLED");
     }
 
-    if (!LittleFS.begin()) {
-        error("Misslyckades att mounta LittleFS");
-    }
-
     delay(1000);
 
+    initFS();
     initLoRa();
     initAccel();
     initPressure();
-    initMagnet();
+//    initMagnet();
 }
 
 void loop() {
     getAccel();
     getPressure();
-    getMagnet();
+//    getMagnet();
 
     String msg = String(temp)+";"+String(pressure)+";"+String(accelX)+";"+String(accelY)+";"+String(accelZ)+";"+String(magnetX)+";"+String(magnetY)+";"+String(magnetZ)+"\n";
 
+    digitalWrite(STATUS_LED, HIGH);
+
     log(msg);
+
+    if (lora.mode() != RHModeTX)
+	digitalWrite(STATUS_LED, LOW);
+}
+
+void initFS() {
+    if (!LittleFS.begin()) {
+	error("Failed to mount LittleFS");
+    }
 }
 
 void initLoRa() {
@@ -88,6 +97,7 @@ void initLoRa() {
 
     lora.setFrequency(loraFrequency);
     lora.setSignalBandwidth(loraBandwidth);
+    lora.setSpreadingFactor(loraSpreadingFactor);
     lora.setTxPower(loraTxPower, false);
 }
 
@@ -115,21 +125,16 @@ void initMagnet() {
 }
 
 void log(String msg) {
-    File file = LittleFS.open("/data.txt", "a");
+    File file = LittleFS.open("/data.txt", "w");
     if (file) {
-      file.print(msg);
-      file.close();
-    }
-    
+	file.print(msg);
+	file.close();
+    } else error("Couldn't open log file");
+
     int len = msg.length();
 
     if (currBufPos + len > RH_RF95_MAX_MESSAGE_LEN - 1) {
-	digitalWrite(STATUS_LED, HIGH);
-	delay(10);
-	digitalWrite(STATUS_LED, LOW);
-
 	buf[currBufPos] = '\0';
-
 	lora.send(buf, currBufPos);
 	currBufPos = 0;
     }
