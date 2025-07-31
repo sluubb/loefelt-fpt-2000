@@ -17,9 +17,17 @@ bool debugMode = false;
 #define LORA_RST 25
 const uint8_t loraTxPower = 10;      // dBm
 const float loraFrequency = 433.0;   // MHz
-const long loraBandwidth = 125;      // kHz
+const unsigned long loraBandwidth = 125;      // kHz
 const uint8_t loraSpreadingFactor = 7;
 RH_RF95 lora(LORA_CS, LORA_INT);
+
+// logging
+const String logFilePath = "/log.csv";
+const unsigned long logInterval = 50;
+const unsigned long logFlushInterval = 10000;
+unsigned long lastLogFlushTime = 0;
+const unsigned long radioLogInterval = 1000;
+unsigned long lastRadioLogTime = 0;
 
 uint8_t currBufPos = 0;
 uint8_t buf[RH_RF95_MAX_MESSAGE_LEN]; 
@@ -35,6 +43,9 @@ float accelX, accelY, accelZ;
 // Magnetometer
 Adafruit_LIS3MDL lis3mdl;
 float magnetX, magnetY, magnetZ;
+
+// FS
+File file;
 
 void setup() {
     pinMode(DEBUG, INPUT_PULLUP);
@@ -69,20 +80,77 @@ void loop() {
     getPressure();
 //    getMagnet();
 
-    String msg = String(temp)+";"+String(pressure)+";"+String(accelX)+";"+String(accelY)+";"+String(accelZ)+";"+String(magnetX)+";"+String(magnetY)+";"+String(magnetZ)+"\n";
+    String msg = millis()+";"+String(temp)+";"+String(pressure)+";"+String(accelX)+";"+String(accelY)+";"+String(accelZ)+";"+String(magnetX)+";"+String(magnetY)+";"+String(magnetZ)+"\n";
 
     digitalWrite(STATUS_LED, HIGH);
-
     log(msg);
+    digitalWrite(STATUS_LED, LOW);
 
-    if (lora.mode() != RHModeTX)
+    delay(logInterval);
+}
+
+void log(String msg) {
+    file.print(msg);
+
+    int len = msg.length();
+    
+    if (currBufPos + len > RH_RF95_MAX_MESSAGE_LEN - 1) {
+	if (lora.mode() != RH_RF95::RHModeTx) {
+	    buf[currBufPos] = '\0';
+	    lora.send(buf, currBufPos);
+
+	    if (debugMode) {
+		Serial.println("INFO :: LoRa buffer transmitted (" + String(currBufPos) + " bytes)");
+	    }
+	} else if (debugMode) {
+	    Serial.println("WARN :: LoRa buffer skipped");
+	}
+
+	currBufPos = 0;
+    }
+
+    if (millis() - lastLogFlushTime >= logFlushInterval) {
+	lastLogFlushTime = millis();
+
+	file.flush();
+	file.close();
+	file = LittleFS.open(logFilePath, "a");
+	if (!file) error("Failed to open log file");
+
+	if (debugMode) {
+	    Serial.println("INFO :: Log file flushed");
+	}
+    }
+
+    if (millis() - lastRadioLogTime >= radioLogInterval) {
+	lastRadioLogTime = millis();
+
+	msg.toCharArray((char *)&buf[currBufPos], sizeof(buf) - currBufPos);
+	currBufPos += len;
+    }
+}
+
+void error(String msg) {
+    if (debugMode) {
+	Serial.print("ERROR :: ");
+	Serial.println(msg);
+    }
+
+    while (1) {
+	digitalWrite(STATUS_LED, HIGH);
+	delay(500);
 	digitalWrite(STATUS_LED, LOW);
+	delay(500);
+    }
 }
 
 void initFS() {
     if (!LittleFS.begin()) {
 	error("Failed to mount LittleFS");
     }
+
+    file = LittleFS.open(logFilePath, "w");
+    if (!file) error("Failed to open log file");
 }
 
 void initLoRa() {
@@ -122,39 +190,6 @@ void initMagnet() {
     lis3mdl.setPerformanceMode(LIS3MDL_LOWPOWERMODE);
     lis3mdl.setRange(LIS3MDL_RANGE_4_GAUSS);
     lis3mdl.setDataRate(LIS3MDL_DATARATE_10_HZ);
-}
-
-void log(String msg) {
-    File file = LittleFS.open("/data.txt", "w");
-    if (file) {
-	file.print(msg);
-	file.close();
-    } else error("Couldn't open log file");
-
-    int len = msg.length();
-
-    if (currBufPos + len > RH_RF95_MAX_MESSAGE_LEN - 1) {
-	buf[currBufPos] = '\0';
-	lora.send(buf, currBufPos);
-	currBufPos = 0;
-    }
-
-    msg.toCharArray((char *)&buf[currBufPos], sizeof(buf) - currBufPos);
-    currBufPos += len;
-}
-
-void error(String msg) {
-    if (debugMode) {
-	Serial.print("ERROR :: ");
-	Serial.println(msg);
-    }
-
-    while (1) {
-	digitalWrite(STATUS_LED, HIGH);
-	delay(500);
-	digitalWrite(STATUS_LED, LOW);
-	delay(500);
-    }
 }
 
 void getAccel() {

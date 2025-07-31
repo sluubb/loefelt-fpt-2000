@@ -6,7 +6,8 @@
 #define LORA_INT 24
 #define LORA_RST 25
 const float loraFrequency = 433.0; // MHz
-const int loraBandwidth = 125;     // kHz
+const long loraBandwidth = 125;     // kHz
+const uint8_t loraSpreadingFactor = 7;
 RH_RF95 lora(LORA_CS, LORA_INT);
 uint8_t buf[RH_RF95_MAX_MESSAGE_LEN]; 
 
@@ -30,6 +31,7 @@ void setup() {
 
     lora.setFrequency(loraFrequency);
     lora.setSignalBandwidth(loraBandwidth);
+    lora.setSpreadingFactor(loraSpreadingFactor);
 }
 
 void loop() {
